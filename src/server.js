@@ -1,13 +1,17 @@
+require('dotenv').config();
 const app = require('./app');
 const connectDB = require('./config/db');
-const { port } = require('./config/env');
+const { seedAdminUser } = require('./services/seedService');
 
-(async () => {
-  try {
+const PORT = process.env.PORT;
+
+const startServer = async () => {
     await connectDB();
-    app.listen(port, () => console.log(`API sur le port ${port}`));
-  } catch (err) {
-    console.error('Échec du démarrage :', err.message);
-    process.exit(1);
-  }
-})();
+    await seedAdminUser();
+
+    app.listen(PORT, () => {
+        console.log(`Serveur MachineCare démarré sur le port ${PORT} en mode ${process.env.NODE_ENV}`);
+    });
+};
+
+startServer();

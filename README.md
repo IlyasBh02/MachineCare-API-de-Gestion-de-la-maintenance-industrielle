@@ -1,244 +1,189 @@
-# FactoryFlow
+# MachineCare API
 
-API REST de gestion de production pour une entreprise industrielle située à Safi. Elle centralise les produits, les matières premières, les stocks et les ordres de fabrication, et garantit des stocks fiables : avant de démarrer un ordre, l'API calcule les besoins, vérifie les stocks et enregistre les consommations.
+> **API REST sécurisée pour la gestion du parc de machines industrielles, la déclaration d'incidents et le suivi de leur résolution en atelier.**
 
-> Projet individuel, backend uniquement (aucune interface frontend).
+[![Node.js](https://img.shields.io/badge/Node.js-20.x-green.svg)](https://nodejs.org/)
+[![Express](https://img.shields.io/badge/Express-5.x-lightgrey.svg)](https://expressjs.com/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-7.0-brightgreen.svg)](https://www.mongodb.com/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-blue.svg)](https://www.docker.com/)
+[![JWT](https://img.shields.io/badge/JWT-Protected-orange.svg)](https://jwt.io/)
 
-> **État actuel :** seuls `GET /api/health`, `GET /api/installation/status` et
-> `POST /api/installation` sont implémentés. L'authentification et les modules
-> produits, stocks et ordres de fabrication décrits ci-dessous restent à développer.
+---
 
-## Sommaire
+## Table des Matières
+1. [Présentation du Projet](#-présentation-du-projet)
+2. [Architecture MVC Modulaire](#-architecture-du-projet)
+3. [Démarrage Rapide avec Docker](#-démarrage-rapide-avec-docker)
+4. [Variables d'Environnement](#-variables-denvironnement)
+5. [Documentation des Endpoints REST](#-documentation-des-endpoints-rest)
+6. [Règles Métier & Sécurité](#-règles-métier--sécurité)
+7. [Gestion Centralisée des Erreurs](#-gestion-centralisée-des-erreurs)
+8. [Collection de Tests Postman](#-tests--collection-postman)
+9. [Workflow Git & Branches](#-workflow-git)
 
-1. [Fonctionnalités](#fonctionnalités)
-2. [Stack technique](#stack-technique)
-3. [Architecture](#architecture)
-4. [Prérequis](#prérequis)
-5. [Configuration](#configuration)
-6. [Démarrage avec Docker Compose](#démarrage-avec-docker-compose)
-7. [Installation via l'API](#installation-via-lapi)
-8. [Tests](#tests)
-9. [Documentation de l'API](#documentation-de-lapi)
-10. [Règles métier importantes](#règles-métier-importantes)
-11. [Commandes utiles](#commandes-utiles)
-12. [Dépannage](#dépannage)
+---
 
-## Fonctionnalités
+## Présentation du Projet
 
-**Admin**
-- Se connecter, consulter son profil, créer les comptes des opérateurs.
-- Gérer les matières premières (unité, seuil d'alerte), enregistrer les entrées de stock, consulter les mouvements.
-- Gérer les produits et leur composition.
-- Créer des ordres de fabrication, les affecter à un opérateur, modifier ou annuler les ordres encore planifiés.
-- Consulter tous les ordres (filtres par statut, produit, période, avec pagination) et repérer les matières sous leur seuil d'alerte.
+**MachineCare** est une solution backend robuste conçue pour optimiser la maintenance assistée par ordinateur (GMAO) dans les ateliers industriels. L'API permet d'inventorier les machines, de notifier les pannes en temps réel, d'attribuer les interventions aux équipes techniques et d'archiver les résolutions d'incidents.
 
-**Opérateur**
-- Se connecter et consulter son profil.
-- Consulter ses ordres affectés et leurs détails.
-- Démarrer un ordre lorsque les matières sont disponibles, puis le terminer.
-- Consulter l'historique de ses ordres terminés.
+---
 
-## Stack technique
+## Architecture du Projet
 
-| Élément | Technologie |
-|---|---|
-| Serveur | Node.js 20, Express |
-| Base de données | MongoDB 7, Mongoose |
-| Authentification | JWT, mots de passe hachés (bcrypt) |
-| Tests | Jest |
-| Qualité du code | ESLint |
-| Conteneurs | Docker, Docker Compose |
-| Documentation | Swagger / OpenAPI |
+L'API adopte une architecture modulaire en couches respectant le principe de responsabilité unique (SRP) :
 
-## Architecture
-
-```
-src/
-├── config/         # variables d'environnement, connexion MongoDB
-├── routes/         # définition des URLs
-├── controllers/    # échanges HTTP (req / res) uniquement
-├── services/       # règles métier
-├── repositories/   # seuls accès à MongoDB
-├── models/         # schémas Mongoose
-├── middlewares/    # authentification, rôles, validation, erreurs
-├── utils/          # outils (AppError, ...)
-├── app.js          # configuration d'Express
-└── server.js       # connexion à la base et lancement du serveur
+```text
+MachineCare/
+├── src/
+│   ├── config/          # Configuration de la base de données MongoDB (Mongoose)
+│   ├── controllers/     # Contrôleurs HTTP (Auth, Machines, Breakdowns)
+│   ├── middlewares/     # JWT Auth, Validation ObjectId, Gestionnaire global d'erreurs
+│   ├── models/          # Schémas Mongoose (User, Machine, Breakdown)
+│   ├── routes/          # Définition et routage des endpoints Express
+│   ├── services/        # Logique métier (Auth token, Seeding automatique)
+│   ├── utils/           # Classe d'erreur AppError, wrapper catchAsync
+│   ├── app.js           # Configuration de l'application Express et des middlewares
+│   └── server.js        # Point d'entrée et démarrage du serveur HTTP
+├── docker-compose.yml   # Orchestration multi-conteneurs (API + MongoDB + Volumes)
+├── Dockerfile           # Image Docker Alpine optimisée pour Node.js
+├── MachineCare.postman_collection.json # Collection de tests Postman complète
+└── package.json         # Dépendances et scripts de démarrage
 ```
 
-Flux d'une requête : **route → contrôleur → service → repository → modèle**.
+---
 
-- Les **contrôleurs** gèrent uniquement HTTP.
-- Les **services** portent les règles métier et ne dépendent pas d'Express.
-- Les **repositories** regroupent tous les accès à MongoDB.
-- Un **middleware global** transforme les erreurs en réponses JSON avec le bon code HTTP (400, 401, 403, 404, 409, 422, 500).
+## Démarrage Rapide avec Docker
 
-## Prérequis
+Le projet est entièrement conteneurisé et s'exécute en une seule commande sans nécessiter l'installation préalable de Node.js ou de MongoDB sur votre machine hôte.
 
-- [Docker](https://docs.docker.com/get-docker/) et Docker Compose v2 (commande `docker compose`)
-- Git
-- Node.js 20 et npm (uniquement pour lancer ESLint ou les tests en dehors de Docker)
-
-## Configuration
-
-Les paramètres sensibles viennent des variables d'environnement. Aucun secret n'est présent dans le dépôt.
-
-1. Copier le modèle :
-
-   ```bash
-   Copy-Item .env.example .env
-   ```
-
-2. Adapter les valeurs dans `.env` :
-
-   | Variable | Description | Exemple |
-   |---|---|---|
-   | `PORT` | Port d'écoute de l'API | `3000` |
-   | `NODE_ENV` | Environnement | `development` |
-   | `MONGO_URI` | URI MongoDB | fourni par Docker Compose |
-   | `JWT_SECRET` | Secret de signature des JWT | valeur longue et aléatoire |
-   | `JWT_EXPIRES_IN` | Durée de validité du token | `1d` |
-
-   Pour générer un secret : `openssl rand -hex 32`.
-
-> Remplacez `JWT_SECRET` par une valeur aléatoire. Dans Docker, Compose définit
-> `MONGO_URI` sur le service `mongo`. Pour lancer Node directement sur la machine,
-> installez MongoDB en replica set et utilisez
-> `mongodb://localhost:27017/factoryflow?replicaSet=rs0`.
-
-## Démarrage avec Docker Compose
-
-Une seule commande démarre le backend et MongoDB :
-
+### 1. Cloner le dépôt Git
 ```bash
-docker compose up --build
+git clone https://github.com/haddadaziz/MachineCare.git
+cd MachineCare
 ```
 
-Ajouter `-d` pour lancer en arrière-plan :
+### 2. Configurer les variables d'environnement
+Créez un fichier `.env` à la racine (ou copiez `.env.example`) :
+```env
+PORT=5000
+NODE_ENV=development
+MONGO_URI=mongodb://mongo:27017/machinecare
+JWT_SECRET=machinecare_super_secret_jwt_key_2026
+ADMIN_EMAIL=admin@machinecare.com
+ADMIN_PASSWORD=Admin1234!
+```
 
+### 3. Lancer l'application
 ```bash
 docker compose up --build -d
 ```
 
-Vérifier que l'API répond :
+* **API REST :** Accessible sur `http://localhost:5000`
+* **MongoDB :** Accessible sur `localhost:27017`
+* **Auto-Seeding :** Au tout premier démarrage, un compte administrateur est automatiquement injecté si la base est vide :
+  * **Email :** `admin@machinecare.com`
+  * **Mot de passe :** `Admin1234!`
 
-```bash
-curl http://localhost:3000/api/health
-# {"status":"ok"}
-```
+---
 
-**Arrêter les services** (les données MongoDB sont conservées) :
+## Variables d'Environnement
 
-```bash
-docker compose down
-```
+| Variable | Description | Valeur par défaut |
+| :--- | :--- | :--- |
+| `PORT` | Port d'écoute du serveur HTTP | `5000` |
+| `NODE_ENV` | Environnement d'exécution (`development` / `production`) | `development` |
+| `MONGO_URI` | Chaîne de connexion MongoDB (utilise le service Docker `mongo`) | `mongodb://mongo:27017/machinecare` |
+| `JWT_SECRET` | Clé secrète pour la signature des jetons JWT | Clé de signature aléatoire |
+| `ADMIN_EMAIL` | Email du compte administrateur créé par seed | `admin@machinecare.com` |
+| `ADMIN_PASSWORD` | Mot de passe du compte administrateur initial | `Admin1234!` |
 
-**Repartir de zéro** (supprime aussi les données) :
+---
 
-```bash
-docker compose down -v
-```
+## Documentation des Endpoints REST
 
-### Points clés de l'environnement Docker
+Toutes les routes protégées nécessitent l'en-tête HTTP : `Authorization: Bearer <votre_token_jwt>`.
 
-- **Rechargement sans rebuild** : le dossier du projet est monté dans le conteneur (bind mount) et le serveur tourne avec `nodemon`. Toute modification du code local est prise en compte immédiatement.
-- **Persistance** : un volume nommé (`mongo_data`) conserve les données MongoDB après l'arrêt et le redémarrage des conteneurs.
-- **Dépendances** : après l'ajout d'un paquet npm, reconstruire avec `docker compose up --build --renew-anon-volumes`.
-- **Replica set** : MongoDB est configuré en replica set à un nœud, nécessaire aux transactions.
+### 1. Surveillance & Santé
+| Méthode | Route | Accès | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/health` | Public | Vérification de la disponibilité du serveur |
 
-## Installation via l'API
+### 2. Authentification & Profil (`/api/auth`)
+| Méthode | Route | Accès | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/auth/login` | Public | Authentification et génération du token JWT |
+| `POST` | `/api/auth/register` | Public | Inscription d'un nouvel utilisateur (`operateur` ou `technicien`) |
+| `GET` | `/api/auth/me` | Privé (JWT) | Consultation du profil de l'utilisateur connecté |
+| `PUT` | `/api/auth/me` | Privé (JWT) | Mise à jour de ses informations (rehachage auto si mot de passe) |
 
-Au premier lancement, aucun compte n'existe. L'installation crée le premier Admin.
+### 3. Parc des Machines (`/api/machines`)
+| Méthode | Route | Accès | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/machines` | Privé (JWT) | Créer une machine (Validation d'unicité de la référence) |
+| `GET` | `/api/machines` | Privé (JWT) | Lister les machines (Filtres : `?atelier=...&etat=...`) |
+| `GET` | `/api/machines/:id` | Privé (JWT) | Consulter les détails d'une machine |
+| `PUT` | `/api/machines/:id` | Privé (JWT) | Modifier les informations d'une machine |
+| `DELETE` | `/api/machines/:id` | Privé (JWT) | Supprimer une machine (Vérification stricte de dépendances) |
+| `GET` | `/api/machines/:id/breakdowns` | Privé (JWT) | Consulter l'historique complet des pannes d'une machine |
 
-**1. Vérifier l'état d'installation**
+### 4. Cycle de Vie des Pannes (`/api/breakdowns`)
+| Méthode | Route | Accès | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/breakdowns` | Privé (JWT) | Signaler un incident (Attribution auto du déclarant) |
+| `GET` | `/api/breakdowns` | Privé (JWT) | Lister les signalements (Filtres : `?machine=...&statut=...`) |
+| `PATCH` | `/api/breakdowns/:id/status` | Privé (JWT) | Faire évoluer le statut (`en attente` ➔ `en cours` ➔ `resolu`) |
 
-```bash
-curl http://localhost:3000/api/installation/status
-```
+---
 
-**2. Installer l'application** (possible une seule fois)
+## Règles Métier & Sécurité
 
-```bash
-curl -X POST http://localhost:3000/api/installation \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Admin","email":"admin@factoryflow.ma","password":"MotDePasse123!"}'
-```
+1. **Protection des Mots de Passe (`select: false`) :**  
+   Les mots de passe sont hachés avec un sel fort via `bcryptjs`. Le schéma Mongoose exclut par défaut le hash des requêtes de lecture pour prévenir toute fuite de données (conforme OWASP).
+2. **Unicité des Références Machines :**  
+   Chaque machine possède une référence unique indexée en majuscules (ex. `PRS-001`). Toute tentative de création d'un doublon est immédiatement interceptée et renvoie un code **409 Conflit**.
+3. **Protection contre la Suppression Orpheline :**  
+   Une machine liée à un ou plusieurs signalements de panne ne peut pas être supprimée de la base. L'API bloque la suppression et renvoie une erreur explicite **400 Bad Request**.
+4. **Validation Stricte de Résolution d'Incident :**  
+   Le passage d'une panne au statut `resolu` exige obligatoirement une note explicative (`noteResolution`). L'API horodate automatiquement la date de fin dans `resolvedAt` et consigne l'identifiant du réparateur dans `resolvedBy`.
 
-- Le mot de passe est haché avant d'être enregistré.
-- Le compte Admin et l'état d'installation sont créés ensemble, ou pas du tout.
-- Une seconde installation est refusée (`409`). Des données invalides sont refusées sans état partiel.
+---
 
-L'authentification n'est pas encore implémentée : aucune route de connexion n'existe.
+##  Gestion Centralisée des Erreurs
 
-### Tester avec Postman
-
-Après le démarrage de Compose, utilisez `http://localhost:3000` comme URL de base :
-
-| Méthode | URL | Résultat attendu |
-|---|---|---|
-| `GET` | `{{baseUrl}}/api/health` | `200`, `{"status":"ok"}` |
-| `GET` | `{{baseUrl}}/api/installation/status` | `200`, état d'installation |
-| `POST` | `{{baseUrl}}/api/installation` | `201` la première fois, puis `409` |
-
-Pour le `POST`, choisissez **Body → raw → JSON** et envoyez :
+L'application utilise un gestionnaire d'erreur global (`errorMiddleware.js`) couplé à la classe `AppError` pour formater l'intégralité des réponses en JSON standardisé :
 
 ```json
 {
-  "name": "Admin",
-  "email": "admin@factoryflow.ma",
-  "password": "MotDePasse123!"
+  "status": "fail",
+  "message": "Description claire de l'erreur métier"
 }
 ```
 
-Postman définit `Content-Type: application/json` lorsque le type JSON est
-sélectionné. L'installation nécessite MongoDB en replica set, fourni par Compose.
-Il n'existe pas encore de route de connexion.
+* **Codes 400 :** Paramètres manquants, validation Mongoose échouée, ID MongoDB invalide.
+* **Code 401 :** Token JWT absent, invalide ou expiré.
+* **Code 404 :** Ressource introuvable ou route indéfinie.
+* **Code 409 :** Conflit d'unicité (email utilisateur ou référence machine dupliquée).
+* **Code 500 :** Erreur interne inattendue.
 
-## Tests
+---
 
-Les tests unitaires couvrent l'installation et la sérialisation du modèle User,
-sans nécessiter de connexion à MongoDB.
+## Tests & Collection Postman
 
-```bash
-npm ci
-npm test
-npm run lint
-```
+Une collection complète est fournie à la racine du projet :  
+**`MachineCare.postman_collection.json`**
 
-## Documentation de l'API
+### Comment l'utiliser :
+1. Ouvrez **Postman** (ou **Bruno**).
+2. Cliquez sur **Import** et sélectionnez le fichier `MachineCare.postman_collection.json`.
+3. Lancez la requête **1. Authentification > Login Admin**.
+4. Copiez le token reçu dans la variable de collection `token` pour exécuter toutes les requêtes sécurisées en un clic !
 
-La documentation Swagger / OpenAPI n'est pas encore configurée.
+---
 
-## Règles métier importantes
+## Workflow Git
 
-- Les références des produits et des matières premières sont **uniques**.
-- Les quantités de composition, d'entrée de stock et de fabrication sont **strictement positives** ; le stock initial et le seuil peuvent être nuls.
-- Un produit utilise **au moins une matière existante**, sans doublon dans sa composition.
-- Un ordre garde une **copie de la composition** du produit à sa création.
-- Statuts : `planifié → en cours → terminé`. Seul un ordre planifié peut être annulé.
-- **Démarrage d'un ordre** : besoins = composition unitaire × quantité à fabriquer.
-  - Si une matière manque : démarrage refusé, aucune quantité déduite.
-  - Sinon : toutes les matières sont déduites, les mouvements de sortie sont enregistrés et le statut passe à « en cours », **dans une seule transaction**.
-  - Un second démarrage du même ordre est refusé et ne déduit pas le stock une nouvelle fois.
-- Un opérateur ne peut ni exécuter une action Admin, ni consulter ou modifier les ordres d'un autre opérateur.
-
-**Exemple** : un produit nécessite 2 kg de A et 3 unités de B. Pour fabriquer 10 produits, l'API vérifie la disponibilité de 20 kg de A et de 30 unités de B avant de démarrer l'ordre.
-
-## Commandes utiles
-
-| Commande | Rôle |
-|---|---|
-| `docker compose up --build -d` | Construire et démarrer les services en arrière-plan |
-| `docker compose ps` | Afficher l'état des conteneurs |
-| `docker compose logs -f backend` | Suivre les logs du backend |
-| `docker compose down` | Arrêter les services (données conservées) |
-| `docker compose down -v` | Arrêter et supprimer les données |
-| `npm run dev` | Lancer l'API avec nodemon (hors Docker) |
-| `npm run lint` | Analyser le code avec ESLint |
-| `npm test` | Lancer les tests unitaires |
-
-
-
-## Auteur
-
-Projet réalisé dans le cadre de la formation *Conception et développement de services backend sécurisés*.
+Le projet applique les standards de **GitFlow** avec traçabilité Jira :
+* `main` : Branche de production stable.
+* `Dev` : Branche d'intégration continue des fonctionnalités.
+* `feature/MAC-XX-...` : Branches dédiées par Story Jira avec Smart Commits.

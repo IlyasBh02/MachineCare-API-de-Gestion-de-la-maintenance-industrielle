@@ -1,20 +1,10 @@
 # Dépendances
 node_modules/
 
-# Secrets : ne JAMAIS publier
+# Variables d'environnement sensibles
 .env
-.env.*
-!.env.example
 
-# Logs
-*.log
+# Logs & OS
 npm-debug.log*
-
-# Fichiers système et éditeur
 .DS_Store
-.vscode/
-.idea/
-
-# Autres
-coverage/
-dist/
+Thumbs.db
